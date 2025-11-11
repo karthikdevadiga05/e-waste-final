@@ -1,0 +1,46 @@
+================================================================================
+E-WASTE RESOURCE POTENTIAL - TARGET GENERATION REPORT (FIXED)
+================================================================================
+
+Generated: 2025-11-09 18:54:21
+
+TOTAL ERP STATISTICS (USD)
+--------------------------------------------------------------------------------
+Minimum: $152.65
+Maximum: $484.48
+Mean: $258.03
+Median: $249.79
+Std Dev: $51.79
+
+COMPONENT ERP BREAKDOWN
+--------------------------------------------------------------------------------
+
+Ram Erp:
+  Mean: $11.85
+  Range: $2.12 - $67.99
+  Contribution: 4.59%
+
+Processor Erp:
+  Mean: $61.33
+  Range: $50.41 - $90.73
+  Contribution: 23.77%
+
+Battery Erp:
+  Mean: $143.30
+  Range: $87.79 - $292.62
+  Contribution: 55.54%
+
+Display Erp:
+  Mean: $13.54
+  Range: $9.08 - $16.17
+  Contribution: 5.25%
+
+Storage Erp:
+  Mean: $2.28
+  Range: $1.77 - $4.83
+  Contribution: 0.88%
+
+Casing Erp:
+  Mean: $25.76
+  Range: $0.00 - $119.78
+  Contribution: 9.98%

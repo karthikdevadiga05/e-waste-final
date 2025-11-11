@@ -1,0 +1,187 @@
+================================================================================
+EXPLORATORY DATA ANALYSIS REPORT
+================================================================================
+
+Generated: 2025-11-10 18:49:48
+
+DATASET SUMMARY
+--------------------------------------------------------------------------------
+          Metric       Value
+      Total_Rows 3976.000000
+   Total_Columns   18.000000
+  Numerical_Cols    2.000000
+Categorical_Cols   16.000000
+  Missing_Values  430.000000
+       Memory_MB    4.567623
+
+================================================================================
+COLUMN DATA TYPES
+================================================================================
+Unnamed: 0          int64
+Brand              object
+Name               object
+Price               int64
+Processor_Name     object
+Processor_Brand    object
+RAM_Expandable     object
+RAM                object
+RAM_TYPE           object
+Ghz                object
+Display_type       object
+Display            object
+GPU                object
+GPU_Brand          object
+SSD                object
+HDD                object
+Adapter            object
+Battery_Life       object
+
+================================================================================
+MISSING VALUES
+================================================================================
+GPU               8
+GPU_Brand         4
+Battery_Life    418
+
+================================================================================
+NUMERICAL STATISTICS
+================================================================================
+        Unnamed: 0          Price
+count  3976.000000    3976.000000
+mean   2181.495724   72432.528672
+std    1297.029657   52207.650948
+min       0.000000    7990.000000
+25%    1058.750000   39873.250000
+50%    2098.500000   58990.000000
+75%    3342.250000   84990.000000
+max    4408.000000  503890.000000
+
+================================================================================
+CATEGORICAL FEATURES
+================================================================================
+
+Brand:
+  Unique values: 31
+
+Name:
+  Unique values: 3941
+
+Processor_Name:
+  Unique values: 125
+
+Processor_Brand:
+  Unique values: 19
+  Value counts:
+    Intel: 3009
+    AMD: 920
+    Apple: 20
+    MediaTek: 4
+    1.7: 4
+    2.4: 2
+    3.4: 2
+    2.0: 2
+    2.1: 2
+    3.0: 2
+
+RAM_Expandable:
+  Unique values: 10
+  Value counts:
+    Not Expandable: 2157
+     16 GB Expandable: 757
+     32 GB Expandable: 537
+     8 GB Expandable: 186
+     12 GB Expandable: 160
+     64 GB Expandable: 158
+     4 GB Expandable: 9
+     48 GB Expandable: 9
+     2 GB Expandable: 2
+     10 GB Expandable: 1
+
+RAM:
+  Unique values: 20
+  Value counts:
+    8 GB : 1608
+    16 GB : 1088
+    4 GB : 547
+    16 GB LP: 299
+    8 GB LP: 182
+    32 GB : 88
+    32 GB LP: 48
+    4 GB LP: 36
+    2 GB : 24
+    16 GB RAM: 16
+
+RAM_TYPE:
+  Unique values: 19
+  Value counts:
+     DDR4 RAM: 1505
+     DDR4 RAM : 1316
+     DDR5 RAM : 247
+     DDR5 RAM: 146
+     LPDDR5 RAM: 142
+     LPDDR4X RAM: 121
+     LPDDR5 RAM : 99
+     DDR3 RAM: 87
+     DDR3 RAM : 69
+     LPDDR3 RAM: 49
+
+Ghz:
+  Unique values: 31
+
+Display_type:
+  Unique values: 2
+  Value counts:
+    LCD: 2034
+    LED: 1942
+
+Display:
+  Unique values: 34
+
+GPU:
+  Unique values: 300
+
+GPU_Brand:
+  Unique values: 11
+  Value counts:
+    Intel: 1939
+    NVIDIA: 1380
+    AMD: 616
+    Apple: 21
+    Nvidia: 8
+    MediaTek: 3
+    Qualcomm: 1
+    NIVIDIA: 1
+    ARM: 1
+    Microsoft: 1
+
+SSD:
+  Unique values: 19
+  Value counts:
+    512 GB SSD Storage: 1931
+    NO SSD: 664
+    1024 GB SSD Storage: 591
+    256 GB SSD Storage: 356
+    256 GB SSD Storage : 205
+    128 GB SSD Storage : 57
+    128 GB SSD Storage: 48
+    2048 GB SSD Storage: 34
+    32 GB SSD Storage: 25
+    64 GB SSD Storage: 23
+
+HDD:
+  Unique values: 8
+  Value counts:
+    No HDD: 3014
+    1024 GB HDD Storage: 602
+     1024 GB HDD Storage: 294
+    500 GB HDD Storage: 43
+    2048 GB HDD Storage: 18
+     500 GB HDD Storage: 3
+     2048 GB HDD Storage: 1
+    1 GB HDD Storage: 1
+
+Adapter:
+  Unique values: 68
+
+Battery_Life:
+  Unique values: 191

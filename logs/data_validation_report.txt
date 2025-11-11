@@ -1,0 +1,103 @@
+================================================================================
+DATA VALIDATION REPORT
+================================================================================
+
+Generated: 2025-11-10 18:49:27
+Dataset: laptop.csv
+
+================================================================================
+DATASET OVERVIEW
+================================================================================
+Rows: 3,976
+Columns: 18
+Duplicates: 0
+Numerical Columns: 2
+Categorical Columns: 16
+
+================================================================================
+COLUMN INFORMATION
+================================================================================
+Unnamed: 0          int64
+Brand              object
+Name               object
+Price               int64
+Processor_Name     object
+Processor_Brand    object
+RAM_Expandable     object
+RAM                object
+RAM_TYPE           object
+Ghz                object
+Display_type       object
+Display            object
+GPU                object
+GPU_Brand          object
+SSD                object
+HDD                object
+Adapter            object
+Battery_Life       object
+
+================================================================================
+MISSING VALUES
+================================================================================
+      Column  Missing_Count  Percentage
+Battery_Life            418   10.513078
+         GPU              8    0.201207
+   GPU_Brand              4    0.100604
+
+================================================================================
+FEATURE MAPPING
+================================================================================
+
+RAM:
+  - RAM_Expandable
+  - RAM
+  - RAM_TYPE
+
+Storage:
+  - SSD
+  - HDD
+
+Processor/CPU:
+  - Processor_Name
+  - Processor_Brand
+
+Display:
+  - Display_type
+  - Display
+
+GPU:
+  - GPU
+  - GPU_Brand
+
+Weight:
+  - Not found
+
+Battery:
+  - Battery_Life
+
+Price:
+  - Price
+
+Brand/Company:
+  - Brand
+  - Processor_Brand
+  - GPU_Brand
+
+Type:
+  - RAM_TYPE
+  - Display_type
+
+================================================================================
+DATA SAMPLE (First 10 rows)
+================================================================================
+   Unnamed: 0    Brand                                                                                                                                       Name  Price                      Processor_Name Processor_Brand     RAM_Expandable      RAM      RAM_TYPE                 Ghz Display_type Display                         GPU GPU_Brand                 SSD                  HDD Adapter                Battery_Life
+0           0       HP           HP Chromebook 11A-NA0002MU (2E4N0PA) Laptop (11.6 Inch | MediaTek Octa Core | 4 GB | Google Chrome |)::585119::computer::laptops  22990                  MediaTek Octa-core        MediaTek     Not Expandable    4 GB       DDR4 RAM   2.0 Ghz Processor          LED   11.6          Integrated Graphics  MediaTek   64 GB SSD Storage               No HDD      45    Upto 12 Hrs Battery Life
+1           1   Lenovo  Lenovo Ideapad Slim 3 (82KU017KIN) Laptop (15.6 Inch | AMD Hexa Core Ryzen 5 | 8 GB | Windows 11 | 512 GB SSD)::594497::computer::laptops  36289               AMD Hexa-Core Ryzen 5             AMD   12 GB Expandable    8 GB      DDR4 RAM    4.0 Ghz Processor          LCD   15.6                       Radeon       AMD  512 GB SSD Storage               No HDD      65    Upto 11 Hrs Battery Life
+2           3     Dell            Dell G15-5520 (D560822WIN9B) Laptop (15.6 Inch | Core i5 12th Gen | 16 GB | Windows 11 | 512 GB SSD)::595299::computer::laptops  78500            Intel Core i5 (12th Gen)           Intel   32 GB Expandable   16 GB      DDR5 RAM    3.3 Ghz Processor          LCD   15.6   GeForce RTX 3050 GPU, 4 GB    NVIDIA  512 GB SSD Storage               No HDD      56    Upto 10 Hrs Battery Life
+3           4       HP                HP 15s-fy5007TU (91R03PA) Laptop (15.6 Inch | Core i5 12th Gen | 8 GB | Windows 11 | 512 GB SSD)::616095::computer::laptops  55490            Intel Core i5 (12th Gen)           Intel    8 GB Expandable    8 GB      DDR4 RAM    4.2 Ghz Processor          LCD   15.6                      Iris Xe     Intel  512 GB SSD Storage               No HDD      no  Upto 7.30 Hrs Battery Life
+4           6  Infinix              Infinix Inbook Y2 Plus XL29 Laptop (15.6 Inch | Core i3 11th Gen | 8 GB | Windows 11 | 512 GB SSD)::615700::computer::laptops  21990            Intel Core i3 (11th Gen)           Intel     Not Expandable  8 GB LP   LPDDR4X RAM   1.7 Ghz Processor          LCD   15.6                          UHD     Intel  512 GB SSD Storage               No HDD      45     Upto 8 Hrs Battery Life
+5           7     Acer         Acer One 14 Z8-415 (UN.599SI.020) Laptop (14 Inch | Core i5 11th Gen | 16 GB | Windows 11 | 512 GB SSD)::616145::computer::laptops  34990  Intel Core i5 (11th Gen) Processor           Intel   32 GB Expandable   16 GB      DDR4 RAM                    0          LCD     14                      Iris Xe     Intel  512 GB SSD Storage               No HDD      45                 45W Adapter
+6           8       HP             HP 14s-fq1092AU (50M60PA) Laptop (14 Inch | AMD Hexa Core Ryzen 5 | 8 GB | Windows 11 | 512 GB SSD)::594309::computer::laptops  49599               AMD Hexa-Core Ryzen 5             AMD   16 GB Expandable    8 GB      DDR4 RAM    4.0 Ghz Processor          LCD     14                       Radeon       AMD  512 GB SSD Storage               No HDD      65     Upto 9 Hrs Battery Life
+7           9     Acer          Acer One 14 Z8-415 (UN.599SI.018) Laptop (14 Inch | Core i5 11th Gen | 8 GB | Windows 11 | 512 GB SSD)::616155::computer::laptops  39990            Intel Core i5 (11th Gen)           Intel   32 GB Expandable    8 GB      DDR4 RAM    2.5 Ghz Processor          LCD     14                      Iris Xe     Intel  512 GB SSD Storage               No HDD      45                 45W Adapter
+8          10   Lenovo                   Lenovo Ideapad S145 (81VD008PIN) Laptop (15.6 Inch | Core i3 8th Gen | 4 GB | DOS | 1 TB HDD)::579826::computer::laptops  33111             Intel Core i3 (8th Gen)           Intel   12 GB Expandable    4 GB      DDR4 RAM    2.2 Ghz Processor          LED   15.6                      UHD 620     Intel              NO SSD  1024 GB HDD Storage      45                 45W Adapter
+9          11     ASUS       ASUS TUF Gaming F15 FX506HF-HN075W Laptop (15.6 Inch | Core i5 11th Gen | 8 GB | Windows 11 | 512 GB SSD)::613032::computer::laptops  48990            Intel Core i5 (11th Gen)           Intel     Not Expandable    8 GB       DDR4 RAM   2.9 Ghz Processor          LCD   15.6   GeForce RTX 2050 GPU, 4 GB    NVIDIA  512 GB SSD Storage               No HDD     150                150W Adapter

@@ -1,0 +1,91 @@
+{
+    "timestamp": "2025-11-10 18:49:27",
+    "source_file": "laptop.csv",
+    "num_rows": 3976,
+    "num_columns": 18,
+    "columns": [
+        "Unnamed: 0",
+        "Brand",
+        "Name",
+        "Price",
+        "Processor_Name",
+        "Processor_Brand",
+        "RAM_Expandable",
+        "RAM",
+        "RAM_TYPE",
+        "Ghz",
+        "Display_type",
+        "Display",
+        "GPU",
+        "GPU_Brand",
+        "SSD",
+        "HDD",
+        "Adapter",
+        "Battery_Life"
+    ],
+    "dtypes": {
+        "Unnamed: 0": "int64",
+        "Brand": "object",
+        "Name": "object",
+        "Price": "int64",
+        "Processor_Name": "object",
+        "Processor_Brand": "object",
+        "RAM_Expandable": "object",
+        "RAM": "object",
+        "RAM_TYPE": "object",
+        "Ghz": "object",
+        "Display_type": "object",
+        "Display": "object",
+        "GPU": "object",
+        "GPU_Brand": "object",
+        "SSD": "object",
+        "HDD": "object",
+        "Adapter": "object",
+        "Battery_Life": "object"
+    },
+    "missing_values": {
+        "GPU": 8,
+        "GPU_Brand": 4,
+        "Battery_Life": 418
+    },
+    "feature_mapping": {
+        "RAM": [
+            "RAM_Expandable",
+            "RAM",
+            "RAM_TYPE"
+        ],
+        "Storage": [
+            "SSD",
+            "HDD"
+        ],
+        "Processor/CPU": [
+            "Processor_Name",
+            "Processor_Brand"
+        ],
+        "Display": [
+            "Display_type",
+            "Display"
+        ],
+        "GPU": [
+            "GPU",
+            "GPU_Brand"
+        ],
+        "Weight": [],
+        "Battery": [
+            "Battery_Life"
+        ],
+        "Price": [
+            "Price"
+        ],
+        "Brand/Company": [
+            "Brand",
+            "Processor_Brand",
+            "GPU_Brand"
+        ],
+        "Type": [
+            "RAM_TYPE",
+            "Display_type"
+        ]
+    },
+    "file_size_mb": 1.168966293334961
+}
