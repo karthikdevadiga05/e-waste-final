@@ -273,7 +273,6 @@ class EWastePredictor:
         else:
             prediction = self.model.predict(input_df)[0]
         
-        # No scaling - use model's native prediction
         print(f"\n💰 Predicted E-waste Resource Potential: ₹{prediction:.2f}")
         print(f"   (Model-predicted value based on recoverable materials)")
         print(f"   (Training range: ₹3,916 - ₹11,654)")
@@ -281,39 +280,129 @@ class EWastePredictor:
         return prediction, input_df
     
     def estimate_component_breakdown(self, laptop, total_erp):
-        """Estimate component-wise ERP breakdown based on training data"""
+        """
+        Estimate component-wise ERP breakdown DYNAMICALLY based on specs
+        NO MORE HARDCODED PERCENTAGES!
+        """
         print("\n" + "="*80)
         print("📊 COMPONENT-WISE BREAKDOWN")
         print("="*80)
         
-        # Use actual percentages from training data:
-        # Processor: 82.5%, RAM: 14.4%, Storage: 1.7%, Display: 1.4%, Battery: ~0%, Casing: 0.01%
-        # But battery SHOULD be 5-10% if fixed
+        # ==========================================
+        # EXTRACT SPECS
+        # ==========================================
+        ram_gb = laptop.get('ram_gb', 8)
+        ram_type = laptop.get('ram_type', 'DDR4').upper()
+        storage_gb = laptop.get('storage_gb', 512)
+        storage_type = laptop.get('storage_type', 'SSD').upper()
+        battery_wh = laptop.get('battery_wh', 50)
+        display_size = laptop.get('display_size', 15.6)
+        weight_kg = laptop.get('weight_kg', 2.0)
+        price = laptop.get('Price', 50000)
+        processor_tier = laptop.get('processor_tier', 'i5').lower()
+        processor_brand = laptop.get('processor_brand', 'Intel')
+        casing_material = laptop.get('casing_material', 'Plastic')
         
+        # ==========================================
+        # DYNAMIC CALCULATION FACTORS
+        # ==========================================
+        
+        # 1. Battery Impact (from SHAP: battery_wh has HUGE impact)
+        battery_baseline_wh = 60
+        battery_baseline_ratio = 0.35
+        battery_adjustment = (battery_wh / battery_baseline_wh)
+        battery_ratio = battery_baseline_ratio * battery_adjustment
+        battery_ratio = np.clip(battery_ratio, 0.10, 0.60)
+        
+        # 2. Processor Impact
+        processor_tier_values = {
+            'i3': 0.7, 'i5': 1.0, 'i7': 1.4, 'i9': 2.0,
+            'ryzen 3': 0.7, 'ryzen 5': 1.0, 'ryzen 7': 1.4, 'ryzen 9': 2.0,
+            'm1': 1.5, 'm2': 1.7, 'm3': 2.0
+        }
+        processor_multiplier = processor_tier_values.get(processor_tier, 1.0)
+        
+        if 'apple' in processor_brand.lower():
+            processor_multiplier *= 1.3
+        
+        processor_baseline_ratio = 0.30
+        processor_ratio = processor_baseline_ratio * processor_multiplier
+        processor_ratio = np.clip(processor_ratio, 0.15, 0.50)
+        
+        # 3. RAM Impact
+        ram_type_values = {
+            'DDR3': 0.8, 'DDR4': 1.0, 'DDR5': 1.3,
+            'LPDDR4': 1.1, 'LPDDR5': 1.4
+        }
+        ram_capacity_factor = (ram_gb / 8)
+        ram_type_factor = ram_type_values.get(ram_type, 1.0)
+        ram_baseline_ratio = 0.15
+        ram_ratio = ram_baseline_ratio * ram_capacity_factor * ram_type_factor
+        ram_ratio = np.clip(ram_ratio, 0.05, 0.25)
+        
+        # 4. Storage Impact
+        storage_capacity_factor = (storage_gb / 512)
+        storage_type_factor = 1.5 if storage_type == 'SSD' else 0.5
+        storage_baseline_ratio = 0.05
+        storage_ratio = storage_baseline_ratio * storage_capacity_factor * storage_type_factor
+        storage_ratio = np.clip(storage_ratio, 0.01, 0.15)
+        
+        # 5. Display Impact
+        display_factor = (display_size / 15.6)
+        display_baseline_ratio = 0.08
+        display_ratio = display_baseline_ratio * display_factor
+        display_ratio = np.clip(display_ratio, 0.03, 0.15)
+        
+        # 6. Casing Impact
+        casing_values = {
+            'plastic': 0.5, 'aluminum': 2.0,
+            'magnesium_alloy': 2.5, 'magnesium alloy': 2.5
+        }
+        casing_multiplier = casing_values.get(casing_material.lower(), 1.0)
+        casing_baseline_ratio = 0.03
+        casing_ratio = casing_baseline_ratio * casing_multiplier
+        casing_ratio = np.clip(casing_ratio, 0.01, 0.10)
+        
+        # ==========================================
+        # NORMALIZE RATIOS
+        # ==========================================
+        total_ratio = (battery_ratio + processor_ratio + ram_ratio + 
+                       storage_ratio + display_ratio + casing_ratio)
+        
+        battery_ratio /= total_ratio
+        processor_ratio /= total_ratio
+        ram_ratio /= total_ratio
+        storage_ratio /= total_ratio
+        display_ratio /= total_ratio
+        casing_ratio /= total_ratio
+        
+        # ==========================================
+        # CALCULATE COMPONENT ERPs
+        # ==========================================
         components = {
-    'Processor': total_erp * 0.80,      # 80% - main PCB & CPU metals
-    'RAM': total_erp * 0.12,            # 12% - gold traces
-    'Storage': total_erp * 0.02,        # 2% - flash/platters
-    'Display': total_erp * 0.03,        # 3% - indium, aluminum
-    'Battery': total_erp * 0.07,        # 7% - lithium, cobalt, nickel
-    'Casing': total_erp * 0.01          # 1% - aluminum/plastic recovery
-}
-
+            'Processor': total_erp * processor_ratio,
+            'RAM': total_erp * ram_ratio,
+            'Storage': total_erp * storage_ratio,
+            'Display': total_erp * display_ratio,
+            'Battery': total_erp * battery_ratio,
+            'Casing': total_erp * casing_ratio
+        }
         
-        # Estimate weights
-        ram_weight = laptop['ram_gb'] * 0.004
-        storage_weight = 0.070 if laptop['storage_type'] == 'HDD' else 0.010
-        battery_weight = laptop['battery_wh'] * 0.006
-        display_weight = laptop['display_size'] * 0.026
-        
-        processor_weights = {'i3': 0.025, 'i5': 0.030, 'i7': 0.035, 'i9': 0.045}
-        processor_weight = processor_weights.get(laptop['processor_tier'], 0.030)
-        
-        casing_weight = max(0.1, laptop['weight_kg'] - (ram_weight + storage_weight + 
-                                                          battery_weight + display_weight + processor_weight))
-        
-        print("\nComponent           ERP         Weight      Method")
-        print("-"*80)
+        # ==========================================
+        # CALCULATE WEIGHTS
+        # ==========================================
+        processor_weights_map = {
+            'i3': 0.025, 'i5': 0.030, 'i7': 0.035, 'i9': 0.045,
+            'ryzen 3': 0.025, 'ryzen 5': 0.030, 'ryzen 7': 0.035, 'ryzen 9': 0.045,
+            'm1': 0.035, 'm2': 0.040, 'm3': 0.045
+        }
+        processor_weight = processor_weights_map.get(processor_tier, 0.030)
+        ram_weight = ram_gb * 0.004
+        storage_weight = 0.070 if storage_type == 'HDD' else 0.010
+        battery_weight = battery_wh * 0.006
+        display_weight = display_size * 0.026
+        casing_weight = max(0.1, weight_kg - (ram_weight + storage_weight + 
+                                               battery_weight + display_weight + processor_weight))
         
         weights = {
             'Processor': processor_weight,
@@ -324,14 +413,23 @@ class EWastePredictor:
             'Casing': casing_weight
         }
         
+        # ==========================================
+        # RECYCLING METHODS
+        # ==========================================
         methods = {
             'Processor': 'Hydrometallurgy',
             'RAM': 'Pyrometallurgy',
-            'Storage': 'Pyrometallurgy' if laptop['storage_type'] == 'SSD' else 'Mechanical',
+            'Storage': 'Pyrometallurgy' if storage_type == 'SSD' else 'Mechanical',
             'Display': 'Mechanical Separation',
             'Battery': 'Hydrometallurgy',
             'Casing': 'Mechanical Separation'
         }
+        
+        # ==========================================
+        # DISPLAY TABLE
+        # ==========================================
+        print("\nComponent           ERP         Weight      Method")
+        print("-"*80)
         
         for comp in ['Processor', 'RAM', 'Storage', 'Display', 'Battery', 'Casing']:
             erp = components[comp]
@@ -339,11 +437,18 @@ class EWastePredictor:
             method = methods[comp]
             print(f"{comp:15s}  ₹{erp:7.2f}    {weight:6.3f} kg   {method}")
         
-        if components['Battery'] == 0:
-            print("\n⚠️  Note: Battery ERP is ₹0 in current model. Run battery fix to correct this.")
+        # Verification
+        total_check = sum(components.values())
+        print(f"\n✓ Total ERP: ₹{total_check:.2f} (matches prediction: ₹{total_erp:.2f})")
+        
+        # Show percentages
+        print(f"\n📊 Component Distribution:")
+        for comp in ['Battery', 'Processor', 'RAM', 'Display', 'Storage', 'Casing']:
+            pct = (components[comp] / total_erp) * 100
+            print(f"   {comp}: {pct:.1f}%")
         
         return components
-    
+
     def explain_with_shap(self, input_df):
         """Explain prediction using SHAP"""
         if not SHAP_AVAILABLE or self.background_data is None:
