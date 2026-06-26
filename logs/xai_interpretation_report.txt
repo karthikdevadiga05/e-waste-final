@@ -2,67 +2,67 @@
 EXPLAINABLE AI (XAI) INTERPRETATION REPORT
 ================================================================================
 
-Generated: 2025-11-10 19:27:11
+Generated: 2026-05-21 11:13:15
 
 MODEL INFORMATION
 --------------------------------------------------------------------------------
 Model: Gradient Boosting
-R² Score: 0.9888
-MAE: $371.96
+R² Score: 0.9564
+MAE: $1155.74
 
 ================================================================================
 FEATURE IMPORTANCE RANKING
 ================================================================================
              Feature  Importance
-               Price    0.370892
-          battery_wh    0.327655
-     casing_material    0.184736
-           weight_kg    0.054911
-      processor_tier    0.033743
-            gpu_type    0.011415
-              ram_gb    0.009579
-        display_size    0.004257
-          storage_gb    0.000619
-       cpu_speed_ghz    0.000561
-processor_generation    0.000389
-            RAM_TYPE    0.000248
-           gpu_brand    0.000229
-           GPU_Brand    0.000217
-               Brand    0.000211
-        storage_type    0.000115
-     Processor_Brand    0.000075
-        Display_type    0.000066
-            ram_type    0.000059
-     processor_brand    0.000022
+      processor_tier    0.280329
+              ram_gb    0.242662
+processor_generation    0.170473
+          battery_wh    0.129513
+               Price    0.057669
+            gpu_type    0.029483
+               Brand    0.029063
+            RAM_TYPE    0.010263
+       cpu_speed_ghz    0.009587
+           weight_kg    0.007903
+     Processor_Brand    0.006928
+     processor_brand    0.005752
+           gpu_brand    0.005406
+          storage_gb    0.004927
+           GPU_Brand    0.003913
+        Display_type    0.002253
+        display_size    0.002094
+            ram_type    0.001011
+        storage_type    0.000441
+   is_ram_expandable    0.000278
+     casing_material    0.000053
         display_type    0.000000
      adapter_wattage    0.000000
-   is_ram_expandable    0.000000
 
 ================================================================================
 FEATURE CORRELATION WITH ERP
 ================================================================================
-Price                   0.657725
-processor_tier          0.654777
-ram_gb                  0.599271
-battery_wh              0.592974
-GPU_Brand               0.396122
-ram_type                0.367636
-storage_type            0.348362
-gpu_brand               0.338303
-cpu_speed_ghz           0.278309
-RAM_TYPE                0.273488
-storage_gb              0.165603
-processor_generation    0.142119
-display_size            0.128040
-weight_kg               0.115335
-Brand                   0.065878
-Processor_Brand         0.064870
-processor_brand         0.025972
-Display_type           -0.162213
-gpu_type               -0.277811
-casing_material        -0.758273
-is_ram_expandable            NaN
-adapter_wattage              NaN
+processor_tier          0.699483
+Price                   0.632382
+ram_gb                  0.627738
+processor_generation    0.616440
+ram_type                0.471751
+storage_type            0.401419
+cpu_speed_ghz           0.398043
+adapter_wattage         0.365674
+battery_wh              0.364742
+GPU_Brand               0.331070
+RAM_TYPE                0.281317
+gpu_brand               0.262335
+display_size            0.213922
+storage_gb              0.171380
+weight_kg               0.169766
+Brand                   0.136676
+Processor_Brand         0.036840
+processor_brand         0.019561
+is_ram_expandable       0.002028
+gpu_type               -0.319697
+Display_type           -0.371417
+casing_material        -0.600991
 display_type                 NaN
 
 ================================================================================
@@ -70,21 +70,21 @@ KEY INSIGHTS
 ================================================================================
 
 1. Most Important Features for ERP Prediction:
-   - Price
-   - battery_wh
-   - casing_material
-   - weight_kg
    - processor_tier
+   - ram_gb
+   - processor_generation
+   - battery_wh
+   - Price
 
 2. Features with Strongest Positive Correlation:
-   - Price: 0.658
-   - processor_tier: 0.655
-   - ram_gb: 0.599
+   - processor_tier: 0.699
+   - Price: 0.632
+   - ram_gb: 0.628
 
 3. Features with Negative Correlation:
-   - Display_type: -0.162
-   - gpu_type: -0.278
-   - casing_material: -0.758
+   - gpu_type: -0.320
+   - Display_type: -0.371
+   - casing_material: -0.601
 
 ================================================================================
 INTERPRETATION SUMMARY

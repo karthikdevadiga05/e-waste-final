@@ -1,748 +1,527 @@
-# interactive_ewaste_predictor.py - COMPLETELY FIXED (All Warnings Resolved)
+# interactive_ewaste_predictor.py  — v6.0 (2025/2026 Support)
 """
-Interactive E-Waste Prediction System - ALL WARNINGS FIXED
-FIXES:
-1. SettingWithCopyWarning resolved with proper .copy() usage
-2. Realistic ERP values without over-scaling
-3. Better component breakdown logic matching training data
-4. Cleaner background data sampling
-5. Improved error handling for SHAP/LIME
-
-Author: E-Waste ML Project
-Version: 2.0 - Bug-Free Edition
+UPDATES v6.0:
+1. All constants now READ from config.py — no hardcoding
+2. Gen 15, Gen 16, Apple M4 automatically supported via config
+3. GEN_MIN_YEAR validation uses config values
+4. REFERENCE_YEAR = 2026 via config
+5. Metal prices 2025/2026 via config
 """
 
-import os
-import sys
+import os, sys
 import pandas as pd
 import numpy as np
 import joblib
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn as sns
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-# Determine project root
-current_dir = os.getcwd()
-if os.path.basename(current_dir) == 'e-waste-ml-project':
-    project_root = current_dir
-else:
-    if 'e-waste-ml-project' in current_dir:
-        parts = current_dir.split('e-waste-ml-project')
-        project_root = parts[0] + 'e-waste-ml-project'
-    else:
-        project_root = current_dir
+def _find_root():
+    cwd = os.getcwd()
+    for name in ['e-waste-final','e-waste-ml-project','ewaste']:
+        if name in cwd:
+            return cwd[:cwd.index(name)+len(name)]
+    return cwd
 
-print(f"Project root: {project_root}")
+project_root = _find_root()
 sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, 'config'))
 
-config_path = os.path.join(project_root, 'config')
-if config_path not in sys.path:
-    sys.path.insert(0, config_path)
+import config as cfg
 
-import config
+# ── All constants read from config.py — update config, not this file ──────
+REFERENCE_YEAR        = cfg.REFERENCE_YEAR
+DEPRECIATION_LAMBDA   = cfg.DEPRECIATION_LAMBDA
+BATTERY_DEPR_LAMBDA   = cfg.BATTERY_DEGRADATION_LAMBDA
+BATTERY_RATE_PER_WH   = cfg.BATTERY_RATE_PER_WH
+PROCESSOR_TIER_VALUES = cfg.PROCESSOR_TIER_VALUES
+GEN_MULTIPLIER        = cfg.GEN_MULTIPLIER
+DEFAULT_GEN_MULT      = cfg.DEFAULT_GEN_MULT
+RAM_RATE_PER_GB       = cfg.RAM_RATE_PER_GB
+RAM_TYPE_PREMIUM      = cfg.RAM_TYPE_PREMIUM
+DISPLAY_RATE_PER_INCH = cfg.DISPLAY_RATE_PER_INCH
+DISPLAY_TYPE_PREMIUM  = cfg.DISPLAY_TYPE_PREMIUM
+SSD_RATE_PER_GB       = cfg.SSD_RATE_PER_GB
+HDD_RATE_PER_GB       = cfg.HDD_RATE_PER_GB
+GPU_VALUES            = cfg.GPU_VALUES
+CASING_RATES          = cfg.CASING_RATES
+BRAND_PREMIUM         = cfg.BRAND_PREMIUM
+GHG_FACTORS           = cfg.GHG_FACTORS
+GEN_MIN_YEAR          = cfg.GEN_MIN_YEAR
 
-# Try to import SHAP and LIME
+# ── Static mappings ────────────────────────────────────────────────────────
+RECYCLING_METHODS = {
+    'Battery':   'Hydrometallurgy',
+    'Processor': 'Hydrometallurgy',
+    'GPU':       'Hydrometallurgy',
+    'RAM':       'Pyrometallurgy',
+    'Display':   'Mechanical Separation',
+    'Casing':    'Mechanical Separation',
+}
+RECOVERABLE_METALS = {
+    'Battery':   'Lithium, Cobalt, Nickel, Copper',
+    'Processor': 'Gold, Silver, Copper, Palladium',
+    'GPU':       'Gold, Copper, Silver, Palladium',
+    'RAM':       'Gold traces, Copper, Silver',
+    'Display':   'Aluminium, Indium (ITO)',
+    'Storage':   'Copper, Gold traces, Aluminium',
+    'Casing':    'Aluminium / Magnesium / Polymer',
+}
+
 try:
     import shap
-    SHAP_AVAILABLE = True
-except:
-    SHAP_AVAILABLE = False
-    print("⚠️  SHAP not available. Install with: pip install shap")
+    SHAP_OK = True
+except ImportError:
+    SHAP_OK = False
 
 try:
     from lime import lime_tabular
-    LIME_AVAILABLE = True
-except:
-    LIME_AVAILABLE = False
-    print("⚠️  LIME not available. Install with: pip install lime")
+    LIME_OK = True
+except ImportError:
+    LIME_OK = False
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+def compute_component_erp(laptop: dict) -> dict:
+    """
+    Live formula — reads rates from config.py.
+    Automatically supports Gen 15/16 and Apple M4 via config.
+    """
+    brand        = str(laptop.get('Brand', 'Unknown')).lower()
+    bp           = BRAND_PREMIUM.get(brand, BRAND_PREMIUM['default'])
+    launch_year  = int(laptop.get('launch_year', 2022))
+    age          = max(0, REFERENCE_YEAR - launch_year)
+    af           = np.exp(-DEPRECIATION_LAMBDA * age)
+    bat_af       = np.exp(-BATTERY_DEPR_LAMBDA * age)
+
+    battery_wh     = float(laptop.get('battery_wh', 50))
+    ram_gb         = float(laptop.get('ram_gb', 8))
+    display_size   = float(laptop.get('display_size', 15.6))
+    storage_gb     = float(laptop.get('storage_gb', 512))
+    storage_type   = str(laptop.get('storage_type', 'SSD')).upper()
+    display_type   = str(laptop.get('display_type', 'IPS')).upper()
+    ram_type       = str(laptop.get('ram_type', 'DDR4')).upper()
+    processor_tier = str(laptop.get('processor_tier', 'i5')).lower()
+    processor_gen  = int(laptop.get('processor_generation', 12))
+    gpu_type       = str(laptop.get('gpu_type', 'Integrated')).lower()
+    casing_mat     = str(laptop.get('casing_material', 'Plastic')).lower()
+    weight_kg      = float(laptop.get('weight_kg', 2.0))
+
+    # Battery
+    battery_erp = battery_wh * BATTERY_RATE_PER_WH * bat_af * bp
+
+    # Processor — uses updated PROCESSOR_TIER_VALUES (M4, Ryzen AI 9 etc.)
+    base = PROCESSOR_TIER_VALUES.get(processor_tier, PROCESSOR_TIER_VALUES['default'])
+    gm   = GEN_MULTIPLIER.get(processor_gen, DEFAULT_GEN_MULT)
+    processor_erp = base * gm * af * bp
+
+    # GPU
+    gpu_val   = GPU_VALUES.get('dedicated' if 'dedicated' in gpu_type else 'integrated', 0)
+    gpu_erp   = gpu_val * af
+
+    # RAM
+    rt_prem   = next((RAM_TYPE_PREMIUM[k] for k in RAM_TYPE_PREMIUM if k in ram_type),
+                     RAM_TYPE_PREMIUM['default'])
+    ram_erp   = ram_gb * RAM_RATE_PER_GB * rt_prem * af
+
+    # Display
+    dt_prem     = DISPLAY_TYPE_PREMIUM.get(display_type, DISPLAY_TYPE_PREMIUM['default'])
+    display_erp = display_size * DISPLAY_RATE_PER_INCH * dt_prem * af
+
+    # Storage
+    stor_rate   = SSD_RATE_PER_GB if 'SSD' in storage_type else HDD_RATE_PER_GB
+    storage_erp = storage_gb * stor_rate * af
+
+    # Casing
+    cas_rate  = CASING_RATES.get(casing_mat, CASING_RATES['default'])
+    cas_wt    = max(0.15, weight_kg * 0.55)
+    casing_erp = cas_wt * cas_rate * af
+
+    total = (battery_erp + processor_erp + gpu_erp +
+             ram_erp + display_erp + storage_erp + casing_erp)
+
+    return {
+        'Battery':       max(0, battery_erp),
+        'Processor':     max(0, processor_erp),
+        'GPU':           max(0, gpu_erp),
+        'RAM':           max(0, ram_erp),
+        'Display':       max(0, display_erp),
+        'Storage':       max(0, storage_erp),
+        'Casing':        max(0, casing_erp),
+        'total_formula': max(0, total),
+        '_age_years':    age,
+        '_age_factor':   af,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 class EWastePredictor:
-    """Interactive E-Waste Prediction System with Bug Fixes"""
-    
-    def __init__(self):
-        """Initialize the prediction system"""
-        print("="*80)
-        print("E-WASTE PREDICTION SYSTEM - LOADING...")
-        print("="*80)
-        
-        self.load_models()
-        self.load_sample_data()
-        
-        # FIX: Don't scale - model already trained on correct values
-        self.erp_scaling_factor = 1.0
-        
-    def load_models(self):
-        """Load trained models and preprocessors"""
-        models_dir = os.path.join(project_root, 'models', 'saved_models')
-        
-        print(f"\nLooking for models in: {models_dir}")
-        
-        best_model_info_path = os.path.join(models_dir, 'best_model_info.pkl')
-        
-        if not os.path.exists(best_model_info_path):
-            print(f"❌ File not found: {best_model_info_path}")
-            raise FileNotFoundError("Models not found! Please train models first.")
-        
-        self.best_model_info = joblib.load(best_model_info_path)
-        model_file = self.best_model_info['model_file']
-        self.model = joblib.load(os.path.join(models_dir, model_file))
-        
-        self.scaler = joblib.load(os.path.join(models_dir, 'scaler.pkl'))
-        self.label_encoders = joblib.load(os.path.join(models_dir, 'label_encoders.pkl'))
-        self.feature_names = joblib.load(os.path.join(models_dir, 'feature_names.pkl'))
-        
-        self.needs_scaling = 'Support Vector' in self.best_model_info['name'] or 'Neural' in self.best_model_info['name']
-        
-        print(f"\n✅ Model loaded: {self.best_model_info['name']}")
-        print(f"   R² Score: {self.best_model_info['metrics']['R²']:.4f}")
-        print(f"   MAE: ₹{self.best_model_info['metrics']['MAE']:.2f}")
-        print(f"   Features: {len(self.feature_names)}")
-        
-    def load_sample_data(self):
-        """Load sample data for SHAP/LIME explanations - FIX SettingWithCopyWarning"""
-        data_path = os.path.join(project_root, 'data', 'processed', 'laptop_ewaste_with_targets.csv')
-        
-        if os.path.exists(data_path):
-            df = pd.read_csv(data_path)
-            
-            # FIX 1: Use .copy() to avoid SettingWithCopyWarning
-            sample_size = min(1000, len(df))
-            
-            try:
-                # Create price bins on original dataframe
-                df['price_bin'] = pd.qcut(df['Price'], q=5, labels=False, duplicates='drop')
-                
-                # Stratified sampling with proper copy
-                self.background_data_full = df.groupby('price_bin', group_keys=False).apply(
-                    lambda x: x.sample(min(len(x), sample_size // 5), random_state=42)
-                ).copy()  # FIX: Add .copy() here to create independent DataFrame
-                
-                print(f"✅ Using STRATIFIED sampling: {len(self.background_data_full)} samples across price ranges")
-            except Exception as e:
-                # Fallback to random sampling with copy
-                self.background_data_full = df.sample(sample_size, random_state=42).copy()
-                print(f"✅ Using RANDOM sampling: {len(self.background_data_full)} samples")
-            
-            # Get available features
-            available_features = [f for f in self.feature_names if f in self.background_data_full.columns]
-            
-            # FIX 2: Create proper copy for background data
-            self.background_data = self.background_data_full[available_features].copy()
-            
-            # Encode categorical - work directly on self.background_data with proper indexing
-            for col, encoder in self.label_encoders.items():
-                if col in self.background_data.columns:
-                    # FIX 3: Use proper pandas operations to avoid warnings
-                    # Convert to string
-                    temp_col = self.background_data[col].astype(str)
-                    
-                    # Handle unknown categories
-                    temp_col = temp_col.apply(
-                        lambda x: x if x in encoder.classes_ else encoder.classes_[0]
-                    )
-                    
-                    # Encode
-                    self.background_data[col] = encoder.transform(temp_col)
-            
-            print(f"✅ Background data loaded: {len(self.background_data)} samples")
-        else:
-            self.background_data = None
-            print("⚠️  No background data available")
-    
-    def get_user_input(self):
-        """Get laptop specifications from user"""
-        print("\n" + "="*80)
-        print("ENTER LAPTOP SPECIFICATIONS")
-        print("="*80)
-        
-        laptop = {}
-        
-        # Brand
-        print("\n📱 Brand:")
-        print("Examples: HP, Dell, Lenovo, ASUS, Acer, Apple")
-        laptop['Brand'] = input("Enter brand: ").strip()
-        
-        # Price
-        print("\n💰 Price:")
-        laptop['Price'] = float(input("Enter price (₹): "))
-        
-        # RAM
-        print("\n🧠 RAM:")
-        print("Options: 4, 8, 16, 32 GB")
-        laptop['ram_gb'] = int(input("Enter RAM (GB): "))
-        
-        print("\nRAM Type:")
-        print("Options: DDR3, DDR4, DDR5")
-        laptop['ram_type'] = input("Enter RAM type: ").strip().upper()
-        laptop['RAM_TYPE'] = ' ' + laptop['ram_type'] + ' RAM'
-        
-        # Storage
-        print("\n💾 Storage:")
-        laptop['storage_gb'] = int(input("Enter storage (GB): "))
-        
-        print("\nStorage Type:")
-        print("Options: SSD, HDD")
-        laptop['storage_type'] = input("Enter storage type: ").strip().upper()
-        
-        # Processor
-        print("\n⚙️  Processor:")
-        print("Brand options: Intel, AMD, Apple")
-        laptop['processor_brand'] = input("Enter processor brand: ").strip()
-        laptop['Processor_Brand'] = laptop['processor_brand']
-        
-        print("\nProcessor Tier:")
-        print("Options: i3, i5, i7, i9 (or Ryzen 3, 5, 7, 9)")
-        laptop['processor_tier'] = input("Enter processor tier: ").strip().lower()
-        
-        # Display
-        print("\n🖥️  Display:")
-        laptop['display_size'] = float(input("Enter display size (inches, e.g., 15.6): "))
-        
-        print("\nDisplay Type:")
-        print("Options: LCD, LED, IPS, OLED")
-        display_input = input("Enter display type: ").strip().upper()
-        laptop['display_type'] = 'IPS'  # Normalized
-        laptop['Display_type'] = display_input
-        
-        # GPU
-        print("\n🎮 GPU:")
-        print("Type options: Integrated, Dedicated")
-        laptop['gpu_type'] = input("Enter GPU type: ").strip()
-        
-        print("\nGPU Brand:")
-        print("Options: Intel, NVIDIA, AMD, Apple")
-        laptop['gpu_brand'] = input("Enter GPU brand: ").strip()
-        laptop['GPU_Brand'] = laptop['gpu_brand']
-        
-        # Physical specs
-        print("\n⚖️  Weight:")
-        laptop['weight_kg'] = float(input("Enter weight (kg, e.g., 2.0): "))
-        
-        print("\n🔋 Battery:")
-        laptop['battery_wh'] = float(input("Enter battery capacity (Wh, e.g., 50): "))
-        
-        print("\n📦 Casing Material:")
-        print("Options: Plastic, Aluminum, Magnesium_Alloy")
-        laptop['casing_material'] = input("Enter casing material: ").strip()
-        
-        # Defaults for engineered features
-        laptop['is_ram_expandable'] = 0
-        laptop['processor_generation'] = 11
-        laptop['cpu_speed_ghz'] = 2.5
-        laptop['adapter_wattage'] = 65
-        laptop['battery_chemistry'] = 'Li-ion'
-        
-        return laptop
-    
-    def prepare_input_for_prediction(self, laptop):
-        """Prepare user input for model prediction"""
-        input_df = pd.DataFrame([laptop])
-        
-        # Add missing features with defaults
-        for feature in self.feature_names:
-            if feature not in input_df.columns:
-                input_df[feature] = config.DEFAULT_VALUES.get(feature, 0)
-        
-        # Reorder to match training
-        input_df = input_df[self.feature_names]
-        
-        # Encode categorical
-        for col, encoder in self.label_encoders.items():
-            if col in input_df.columns:
-                input_df[col] = input_df[col].astype(str)
-                input_df[col] = input_df[col].apply(
-                    lambda x: x if x in encoder.classes_ else encoder.classes_[0]
-                )
-                input_df[col] = encoder.transform(input_df[col])
-        
-        return input_df
-    
-    def predict_erp(self, laptop):
-        """Predict E-waste Resource Potential"""
-        print("\n" + "="*80)
-        print("🔮 PREDICTING E-WASTE RESOURCE POTENTIAL...")
-        print("="*80)
-        
-        input_df = self.prepare_input_for_prediction(laptop)
-        
-        if self.needs_scaling:
-            input_scaled = self.scaler.transform(input_df)
-            prediction = self.model.predict(input_scaled)[0]
-        else:
-            prediction = self.model.predict(input_df)[0]
-        
-        print(f"\n💰 Predicted E-waste Resource Potential: ₹{prediction:.2f}")
-        print(f"   (Model-predicted value based on recoverable materials)")
-        print(f"   (Training range: ₹3,916 - ₹11,654)")
-        
-        return prediction, input_df
-    
-    def estimate_component_breakdown(self, laptop, total_erp):
-        """
-        Estimate component-wise ERP breakdown DYNAMICALLY based on specs
-        NO MORE HARDCODED PERCENTAGES!
-        """
-        print("\n" + "="*80)
-        print("📊 COMPONENT-WISE BREAKDOWN")
-        print("="*80)
-        
-        # ==========================================
-        # EXTRACT SPECS
-        # ==========================================
-        ram_gb = laptop.get('ram_gb', 8)
-        ram_type = laptop.get('ram_type', 'DDR4').upper()
-        storage_gb = laptop.get('storage_gb', 512)
-        storage_type = laptop.get('storage_type', 'SSD').upper()
-        battery_wh = laptop.get('battery_wh', 50)
-        display_size = laptop.get('display_size', 15.6)
-        weight_kg = laptop.get('weight_kg', 2.0)
-        price = laptop.get('Price', 50000)
-        processor_tier = laptop.get('processor_tier', 'i5').lower()
-        processor_brand = laptop.get('processor_brand', 'Intel')
-        casing_material = laptop.get('casing_material', 'Plastic')
-        
-        # ==========================================
-        # DYNAMIC CALCULATION FACTORS
-        # ==========================================
-        
-        # 1. Battery Impact (from SHAP: battery_wh has HUGE impact)
-        battery_baseline_wh = 60
-        battery_baseline_ratio = 0.35
-        battery_adjustment = (battery_wh / battery_baseline_wh)
-        battery_ratio = battery_baseline_ratio * battery_adjustment
-        battery_ratio = np.clip(battery_ratio, 0.10, 0.60)
-        
-        # 2. Processor Impact
-        processor_tier_values = {
-            'i3': 0.7, 'i5': 1.0, 'i7': 1.4, 'i9': 2.0,
-            'ryzen 3': 0.7, 'ryzen 5': 1.0, 'ryzen 7': 1.4, 'ryzen 9': 2.0,
-            'm1': 1.5, 'm2': 1.7, 'm3': 2.0
-        }
-        processor_multiplier = processor_tier_values.get(processor_tier, 1.0)
-        
-        if 'apple' in processor_brand.lower():
-            processor_multiplier *= 1.3
-        
-        processor_baseline_ratio = 0.30
-        processor_ratio = processor_baseline_ratio * processor_multiplier
-        processor_ratio = np.clip(processor_ratio, 0.15, 0.50)
-        
-        # 3. RAM Impact
-        ram_type_values = {
-            'DDR3': 0.8, 'DDR4': 1.0, 'DDR5': 1.3,
-            'LPDDR4': 1.1, 'LPDDR5': 1.4
-        }
-        ram_capacity_factor = (ram_gb / 8)
-        ram_type_factor = ram_type_values.get(ram_type, 1.0)
-        ram_baseline_ratio = 0.15
-        ram_ratio = ram_baseline_ratio * ram_capacity_factor * ram_type_factor
-        ram_ratio = np.clip(ram_ratio, 0.05, 0.25)
-        
-        # 4. Storage Impact
-        storage_capacity_factor = (storage_gb / 512)
-        storage_type_factor = 1.5 if storage_type == 'SSD' else 0.5
-        storage_baseline_ratio = 0.05
-        storage_ratio = storage_baseline_ratio * storage_capacity_factor * storage_type_factor
-        storage_ratio = np.clip(storage_ratio, 0.01, 0.15)
-        
-        # 5. Display Impact
-        display_factor = (display_size / 15.6)
-        display_baseline_ratio = 0.08
-        display_ratio = display_baseline_ratio * display_factor
-        display_ratio = np.clip(display_ratio, 0.03, 0.15)
-        
-        # 6. Casing Impact
-        casing_values = {
-            'plastic': 0.5, 'aluminum': 2.0,
-            'magnesium_alloy': 2.5, 'magnesium alloy': 2.5
-        }
-        casing_multiplier = casing_values.get(casing_material.lower(), 1.0)
-        casing_baseline_ratio = 0.03
-        casing_ratio = casing_baseline_ratio * casing_multiplier
-        casing_ratio = np.clip(casing_ratio, 0.01, 0.10)
-        
-        # ==========================================
-        # NORMALIZE RATIOS
-        # ==========================================
-        total_ratio = (battery_ratio + processor_ratio + ram_ratio + 
-                       storage_ratio + display_ratio + casing_ratio)
-        
-        battery_ratio /= total_ratio
-        processor_ratio /= total_ratio
-        ram_ratio /= total_ratio
-        storage_ratio /= total_ratio
-        display_ratio /= total_ratio
-        casing_ratio /= total_ratio
-        
-        # ==========================================
-        # CALCULATE COMPONENT ERPs
-        # ==========================================
-        components = {
-            'Processor': total_erp * processor_ratio,
-            'RAM': total_erp * ram_ratio,
-            'Storage': total_erp * storage_ratio,
-            'Display': total_erp * display_ratio,
-            'Battery': total_erp * battery_ratio,
-            'Casing': total_erp * casing_ratio
-        }
-        
-        # ==========================================
-        # CALCULATE WEIGHTS
-        # ==========================================
-        processor_weights_map = {
-            'i3': 0.025, 'i5': 0.030, 'i7': 0.035, 'i9': 0.045,
-            'ryzen 3': 0.025, 'ryzen 5': 0.030, 'ryzen 7': 0.035, 'ryzen 9': 0.045,
-            'm1': 0.035, 'm2': 0.040, 'm3': 0.045
-        }
-        processor_weight = processor_weights_map.get(processor_tier, 0.030)
-        ram_weight = ram_gb * 0.004
-        storage_weight = 0.070 if storage_type == 'HDD' else 0.010
-        battery_weight = battery_wh * 0.006
-        display_weight = display_size * 0.026
-        casing_weight = max(0.1, weight_kg - (ram_weight + storage_weight + 
-                                               battery_weight + display_weight + processor_weight))
-        
-        weights = {
-            'Processor': processor_weight,
-            'RAM': ram_weight,
-            'Storage': storage_weight,
-            'Display': display_weight,
-            'Battery': battery_weight,
-            'Casing': casing_weight
-        }
-        
-        # ==========================================
-        # RECYCLING METHODS
-        # ==========================================
-        methods = {
-            'Processor': 'Hydrometallurgy',
-            'RAM': 'Pyrometallurgy',
-            'Storage': 'Pyrometallurgy' if storage_type == 'SSD' else 'Mechanical',
-            'Display': 'Mechanical Separation',
-            'Battery': 'Hydrometallurgy',
-            'Casing': 'Mechanical Separation'
-        }
-        
-        # ==========================================
-        # DISPLAY TABLE
-        # ==========================================
-        print("\nComponent           ERP         Weight      Method")
-        print("-"*80)
-        
-        for comp in ['Processor', 'RAM', 'Storage', 'Display', 'Battery', 'Casing']:
-            erp = components[comp]
-            weight = weights[comp]
-            method = methods[comp]
-            print(f"{comp:15s}  ₹{erp:7.2f}    {weight:6.3f} kg   {method}")
-        
-        # Verification
-        total_check = sum(components.values())
-        print(f"\n✓ Total ERP: ₹{total_check:.2f} (matches prediction: ₹{total_erp:.2f})")
-        
-        # Show percentages
-        print(f"\n📊 Component Distribution:")
-        for comp in ['Battery', 'Processor', 'RAM', 'Display', 'Storage', 'Casing']:
-            pct = (components[comp] / total_erp) * 100
-            print(f"   {comp}: {pct:.1f}%")
-        
-        return components
 
-    def explain_with_shap(self, input_df):
-        """Explain prediction using SHAP"""
-        if not SHAP_AVAILABLE or self.background_data is None:
-            print("\n⚠️  SHAP explanations not available")
-            return
-        
-        print("\n" + "="*80)
-        print("🔍 SHAP EXPLANATION (Why this prediction?)")
-        print("="*80)
-        
-        try:
-            print("\nGenerating SHAP explanation (this may take a moment)...")
-            
-            # Use TreeExplainer for tree-based models
-            if hasattr(self.model, 'estimators_') or hasattr(self.model, 'tree_'):
-                explainer = shap.TreeExplainer(self.model)
-                
-                if self.needs_scaling:
-                    input_scaled = self.scaler.transform(input_df)
-                    shap_values = explainer.shap_values(input_scaled)
-                else:
-                    shap_values = explainer.shap_values(input_df.values)
-            else:
-                # Fallback to KernelExplainer
-                background_sample = self.background_data.sample(min(50, len(self.background_data)), random_state=42)
-                
-                if self.needs_scaling:
-                    background_scaled = self.scaler.transform(background_sample)
-                    explainer = shap.KernelExplainer(self.model.predict, background_scaled)
-                    input_scaled = self.scaler.transform(input_df)
-                    shap_values = explainer.shap_values(input_scaled)
-                else:
-                    explainer = shap.KernelExplainer(self.model.predict, background_sample.values)
-                    shap_values = explainer.shap_values(input_df.values)
-            
-            # Handle multi-dimensional output
-            if isinstance(shap_values, list):
-                shap_values = shap_values[0]
-            
-            if shap_values.ndim > 1:
-                shap_values = shap_values[0]
-            
-            # Create contributions dataframe
-            contributions = pd.DataFrame({
-                'Feature': self.feature_names,
-                'Value': input_df.values[0],
-                'Impact': shap_values
-            })
-            contributions['Abs_Impact'] = contributions['Impact'].abs()
-            contributions = contributions.sort_values('Abs_Impact', ascending=False)
-            
-            print("\nTop 10 Features Contributing to Prediction:")
-            print("-"*80)
-            print(f"{'Feature':<20} {'Your Value':<15} {'Impact on ERP':<15}")
-            print("-"*80)
-            
-            for _, row in contributions.head(10).iterrows():
-                feature = row['Feature']
-                value = row['Value']
-                impact = row['Impact']
-                
-                # Decode categorical
-                if feature in self.label_encoders:
-                    try:
-                        value = self.label_encoders[feature].inverse_transform([int(value)])[0]
-                    except:
-                        pass
-                
-                impact_str = f"+₹{abs(impact):.2f}" if impact > 0 else f"-₹{abs(impact):.2f}"
-                print(f"{feature:<20} {str(value):<15} {impact_str:<15}")
-            
-            # Create waterfall plot
-            plt.figure(figsize=(10, 6))
-            top_features = contributions.head(10)
-            colors = ['green' if x > 0 else 'red' for x in top_features['Impact']]
-            
-            plt.barh(range(len(top_features)), top_features['Impact'], color=colors)
-            plt.yticks(range(len(top_features)), top_features['Feature'])
-            plt.xlabel('Impact on ERP Prediction (₹)')
-            plt.title('SHAP Feature Importance - Your Laptop', fontweight='bold')
-            plt.axvline(x=0, color='black', linestyle='--', linewidth=1)
-            plt.tight_layout()
-            
-            output_path = os.path.join(project_root, 'results', 'predictions', 
-                                       f'shap_explanation_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
-            plt.savefig(output_path, dpi=150, bbox_inches='tight')
-            plt.close()
-            
-            print(f"\n✅ SHAP explanation saved: {output_path}")
-            
-        except Exception as e:
-            print(f"⚠️  Error generating SHAP explanation: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    def explain_with_lime(self, input_df):
-        """Explain prediction using LIME"""
-        if not LIME_AVAILABLE or self.background_data is None:
-            print("\n⚠️  LIME explanations not available")
-            return
-        
-        print("\n" + "="*80)
-        print("🔍 LIME EXPLANATION (Local interpretation)")
-        print("="*80)
-        
-        try:
-            print("\nGenerating LIME explanation...")
-            
-            if self.needs_scaling:
-                background_scaled = self.scaler.transform(self.background_data)
-                explainer = lime_tabular.LimeTabularExplainer(
-                    background_scaled,
-                    feature_names=self.feature_names,
-                    mode='regression',
-                    verbose=False,
-                    discretize_continuous=True
-                )
-                input_scaled = self.scaler.transform(input_df)
-                instance = input_scaled[0]
-            else:
-                explainer = lime_tabular.LimeTabularExplainer(
-                    self.background_data.values,
-                    feature_names=self.feature_names,
-                    mode='regression',
-                    verbose=False,
-                    discretize_continuous=True
-                )
-                instance = input_df.values[0]
-            
-            # Generate explanation
-            exp = explainer.explain_instance(
-                instance,
-                self.model.predict,
-                num_features=10,
-                num_samples=1000
+    def __init__(self):
+        print("=" * 70)
+        print(f"E-WASTE PREDICTION SYSTEM  v6.0  (2025/2026)")
+        print(f"Reference year: {REFERENCE_YEAR}  |  Supported: Gen 15/16, M4")
+        print("=" * 70)
+        self._load_models()
+        self._load_background()
+
+    def _load_models(self):
+        mdir = os.path.join(project_root, 'models', 'saved_models')
+        info = os.path.join(mdir, 'best_model_info.pkl')
+        if not os.path.exists(info):
+            raise FileNotFoundError(
+                f"No models found in {mdir}\n"
+                "Run pipeline first:\n"
+                "  python src/batch_1/05_target_generation.py\n"
+                "  python src/batch_2/06_model_training.py"
             )
-            
-            print("\nLIME Top Feature Contributions:")
-            print("-"*80)
-            for feature, weight in exp.as_list():
-                print(f"  {feature:50s}: {weight:+.2f}")
-            
-            # Save LIME plot
+        self.best_info      = joblib.load(info)
+        self.model          = joblib.load(os.path.join(mdir, self.best_info['model_file']))
+        self.scaler         = joblib.load(os.path.join(mdir, 'scaler.pkl'))
+        self.label_encoders = joblib.load(os.path.join(mdir, 'label_encoders.pkl'))
+        self.feature_names  = joblib.load(os.path.join(mdir, 'feature_names.pkl'))
+        self.needs_scaling  = 'Support Vector' in self.best_info['name']
+        m = self.best_info['metrics']
+        print(f"\n  Model  : {self.best_info['name']}")
+        print(f"  Test R2: {m.get('R²', m.get('R2', 0)):.4f}")
+        print(f"  MAE    : Rs.{m.get('MAE', 0):.2f}")
+        if 'CV_R2_mean' in m:
+            print(f"  CV R2  : {m['CV_R2_mean']:.4f} +/- {m['CV_R2_std']:.4f}")
+
+    def _load_background(self):
+        path = os.path.join(project_root, 'data', 'processed',
+                            'laptop_ewaste_with_targets.csv')
+        self.background_data = None
+        if not os.path.exists(path):
+            return
+        df  = pd.read_csv(path)
+        bg  = df.sample(min(1000, len(df)), random_state=42)
+        avail = [f for f in self.feature_names if f in bg.columns]
+        bg  = bg[avail].copy()
+        for col, enc in self.label_encoders.items():
+            if col in bg.columns:
+                bg[col] = bg[col].astype(str).apply(
+                    lambda x: x if x in enc.classes_ else enc.classes_[0]
+                )
+                bg[col] = enc.transform(bg[col])
+        self.background_data = bg.fillna(bg.mean(numeric_only=True))
+        print(f"  Background: {len(self.background_data)} samples for XAI")
+
+    # ── Input ────────────────────────────────────────────────────────────────
+    def _get_input(self) -> dict:
+        print("\n" + "=" * 70)
+        print("ENTER LAPTOP SPECIFICATIONS")
+        print("=" * 70)
+
+        def ask(prompt, default, cast=str):
+            v = input(f"{prompt} [{default}]: ").strip()
+            return cast(v) if v else cast(default)
+
+        lap = {}
+        print("\n-- Brand & Price --")
+        lap['Brand']               = ask("Brand (HP/Dell/Lenovo/ASUS/Acer/Apple/MSI)", "Dell")
+        lap['Price']               = ask("Retail price (Rs.)", 65000, float)
+        lap['launch_year']         = ask("Launch year (e.g. 2025)", 2025, int)
+
+        print("\n-- RAM --")
+        lap['ram_gb']              = ask("RAM (GB) [4/8/16/24/32/64]", 16, int)
+        lap['ram_type']            = ask("RAM type [DDR3/DDR4/DDR5]", "DDR5").upper()
+        lap['RAM_TYPE']            = ' ' + lap['ram_type'] + ' RAM'
+
+        print("\n-- Storage --")
+        lap['storage_gb']          = ask("Storage (GB)", 512, int)
+        lap['storage_type']        = ask("Type [SSD/HDD]", "SSD").upper()
+
+        print("\n-- Processor --")
+        lap['processor_brand']     = ask("CPU Brand [Intel/AMD/Apple]", "Intel")
+        lap['Processor_Brand']     = lap['processor_brand']
+        lap['processor_tier']      = ask(
+            "Tier [i3/i5/i7/i9/ryzen 5/ryzen 7/ryzen 9/ryzen ai 9/m2/m3/m4]",
+            "i5"
+        ).lower()
+        lap['processor_generation'] = ask(
+            "CPU Generation [10-16] (15=Arrow Lake, 16=Panther Lake)", 15, int
+        )
+        lap['cpu_speed_ghz']       = ask("CPU Speed GHz", 3.0, float)
+
+        print("\n-- Display --")
+        lap['display_size']        = ask("Screen size (inches)", 15.6, float)
+        lap['display_type']        = ask("Type [LCD/LED/IPS/OLED/AMOLED]", "IPS").upper()
+        lap['Display_type']        = lap['display_type']
+
+        print("\n-- GPU --")
+        lap['gpu_type']            = ask("GPU [Integrated/Dedicated]", "Integrated")
+        lap['gpu_brand']           = ask("GPU brand [Intel/NVIDIA/AMD/Apple]", "Intel")
+        lap['GPU_Brand']           = lap['gpu_brand']
+
+        print("\n-- Physical --")
+        lap['weight_kg']           = ask("Weight (kg)", 1.8, float)
+        lap['battery_wh']          = ask("Battery (Wh)", 57.0, float)
+        lap['casing_material']     = ask(
+            "Casing [Plastic/Aluminum/Magnesium_Alloy]", "Plastic"
+        )
+
+        # ── Year/Generation consistency check (uses config GEN_MIN_YEAR) ──
+        gen = lap['processor_generation']
+        yr  = lap['launch_year']
+        if gen in GEN_MIN_YEAR:
+            min_yr = GEN_MIN_YEAR[gen]
+            if yr < min_yr:
+                print(f"\n  ⚠️  Warning: Gen {gen} launched in {min_yr}, "
+                      f"not {yr}. Age factor will use {yr} as entered.")
+
+        lap['adapter_wattage']     = ask("Adapter wattage (W)", 65, int)
+        lap['is_ram_expandable']   = 0
+        return lap
+
+    # ── Predict ──────────────────────────────────────────────────────────────
+    def _predict(self, laptop: dict):
+        inp = pd.DataFrame([laptop])
+        for f in self.feature_names:
+            if f not in inp.columns:
+                inp[f] = 0
+        inp = inp[self.feature_names]
+        for col, enc in self.label_encoders.items():
+            if col in inp.columns:
+                inp[col] = inp[col].astype(str).apply(
+                    lambda x: x if x in enc.classes_ else enc.classes_[0]
+                )
+                inp[col] = enc.transform(inp[col])
+        X = self.scaler.transform(inp) if self.needs_scaling else inp
+        return float(self.model.predict(X)[0]), inp
+
+    # ── Breakdown ────────────────────────────────────────────────────────────
+    def _show_breakdown(self, laptop: dict, ml_pred: float):
+        print("\n" + "=" * 70)
+        print("COMPONENT-WISE ERP BREAKDOWN")
+        print("=" * 70)
+
+        erp           = compute_component_erp(laptop)
+        formula_total = erp['total_formula']
+        scale         = ml_pred / formula_total if formula_total > 0 else 1.0
+
+        stor_method = ('Pyrometallurgy'
+                       if 'SSD' in str(laptop.get('storage_type', 'SSD')).upper()
+                       else 'Mechanical Separation')
+        methods = {**RECYCLING_METHODS, 'Storage': stor_method}
+
+        print(f"\n  Age: {erp['_age_years']} yr  "
+              f"(factor={erp['_age_factor']:.2f}  "
+              f"-> ERP reduced {(1 - erp['_age_factor']) * 100:.1f}% vs new)")
+
+        comps  = ['Battery', 'Processor', 'GPU', 'RAM', 'Display', 'Storage', 'Casing']
+        scaled = {}
+
+        print(f"\n  {'Component':12s} {'Formula ERP':>14} {'ML-scaled':>12} "
+              f"{'% total':>9}  Method")
+        print("  " + "-" * 78)
+
+        for c in comps:
+            raw = erp.get(c, 0)
+            sv  = raw * scale
+            pct = raw / formula_total * 100 if formula_total > 0 else 0
+            mth = methods.get(c, 'N/A')
+            scaled[c] = sv
+
+            if c == 'GPU' and raw == 0:
+                print(f"  {'GPU':12s} {'(Integrated)':>14} {'—':>12} {'0.0%':>9}  —")
+                continue
+
+            print(f"  {c:12s} Rs.{raw:>10,.2f}  Rs.{sv:>9,.2f}  "
+                  f"{pct:>8.1f}%  {mth}")
+
+        print("  " + "-" * 78)
+        print(f"  {'TOTAL':12s} Rs.{formula_total:>10,.2f}  Rs.{ml_pred:>9,.2f}")
+
+        top     = max(comps, key=lambda c: erp.get(c, 0))
+        top_pct = erp.get(top, 0) / formula_total * 100 if formula_total > 0 else 0
+        print(f"\n  Top component: {top}  Rs.{erp.get(top, 0):,.2f}  ({top_pct:.1f}%)")
+
+        print(f"\n  NOTE: ERP = theoretical market recovery value")
+        print(f"  Est. actual recycler buyback: "
+              f"Rs.{ml_pred * 0.40:,.0f} – Rs.{ml_pred * 0.55:,.0f}")
+        print(f"  (after labour, transport & recycler margin)")
+
+        return scaled
+
+    # ── SHAP ─────────────────────────────────────────────────────────────────
+    def _explain_shap(self, inp_df):
+        if not SHAP_OK or self.background_data is None:
+            print("\n  SHAP not available (pip install shap)")
+            return
+        print("\n" + "=" * 70)
+        print("SHAP EXPLANATION")
+        print("=" * 70)
+        try:
+            Xtr = self.scaler.transform(inp_df) if self.needs_scaling else inp_df.values
+            if hasattr(self.model, 'estimators_'):
+                explainer   = shap.TreeExplainer(self.model)
+                shap_values = explainer.shap_values(Xtr)
+            else:
+                bg = self.background_data.sample(50, random_state=42).values
+                if self.needs_scaling:
+                    bg = self.scaler.transform(bg)
+                explainer   = shap.KernelExplainer(self.model.predict, bg)
+                shap_values = explainer.shap_values(Xtr[0])
+            sv = np.array(shap_values).flatten()
+            ct = pd.DataFrame({'Feature': self.feature_names, 'Impact': sv})
+            ct['Abs'] = ct['Impact'].abs()
+            ct = ct.sort_values('Abs', ascending=False).head(10)
+            print(f"\n  {'Feature':22s} {'Impact on ERP':>15}")
+            print("  " + "-" * 40)
+            for _, r in ct.iterrows():
+                sign = (f"+Rs.{abs(r.Impact):,.2f}"
+                        if r.Impact > 0 else f"-Rs.{abs(r.Impact):,.2f}")
+                print(f"  {r.Feature:22s} {sign:>15}")
+            plt.figure(figsize=(10, 5))
+            colors = ['#2196F3' if x > 0 else '#F44336' for x in ct['Impact']]
+            plt.barh(range(len(ct)), ct['Impact'], color=colors)
+            plt.yticks(range(len(ct)), ct['Feature'])
+            plt.axvline(0, color='black', linewidth=0.8, linestyle='--')
+            plt.xlabel('Impact on ERP Prediction (Rs.)')
+            plt.title('SHAP Feature Importance', fontweight='bold')
+            plt.tight_layout()
+            out = os.path.join(project_root, 'results', 'predictions',
+                               f'shap_{datetime.now():%Y%m%d_%H%M%S}.png')
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            plt.savefig(out, dpi=150)
+            plt.close()
+            print(f"\n  SHAP plot saved: {out}")
+        except Exception as e:
+            print(f"  SHAP error: {e}")
+
+    # ── LIME ─────────────────────────────────────────────────────────────────
+    def _explain_lime(self, inp_df):
+        if not LIME_OK or self.background_data is None:
+            print("\n  LIME not available (pip install lime)")
+            return
+        print("\n" + "=" * 70)
+        print("LIME EXPLANATION")
+        print("=" * 70)
+        try:
+            bg  = self.background_data.values
+            ins = inp_df.values[0]
+            if self.needs_scaling:
+                bg  = self.scaler.transform(bg)
+                ins = self.scaler.transform(inp_df)[0]
+            explainer = lime_tabular.LimeTabularExplainer(
+                bg, feature_names=self.feature_names,
+                mode='regression', verbose=False, discretize_continuous=True
+            )
+            exp = explainer.explain_instance(
+                ins, self.model.predict, num_features=10, num_samples=500
+            )
+            print("\n  Top feature contributions:")
+            for feat, wt in exp.as_list():
+                print(f"  {feat:50s}: {wt:+.2f}")
             fig = exp.as_pyplot_figure()
             plt.tight_layout()
-            output_path = os.path.join(project_root, 'results', 'predictions',
-                                       f'lime_explanation_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
-            plt.savefig(output_path, dpi=150, bbox_inches='tight')
+            out = os.path.join(project_root, 'results', 'predictions',
+                               f'lime_{datetime.now():%Y%m%d_%H%M%S}.png')
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            plt.savefig(out, dpi=150)
             plt.close()
-            
-            print(f"\n✅ LIME explanation saved: {output_path}")
-            
+            print(f"\n  LIME plot saved: {out}")
         except Exception as e:
-            print(f"⚠️  Error generating LIME explanation: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    def provide_recommendations(self, laptop, total_erp, components):
-        """Provide recycling recommendations"""
-        print("\n" + "="*80)
-        print("💡 RECYCLING RECOMMENDATIONS")
-        print("="*80)
-        
-        print(f"\n1. OVERALL ASSESSMENT:")
-        print(f"   Total recoverable value: ₹{total_erp:.2f}")
-        
-        # Classification based on training data range (₹3916 - ₹11654)
-        if total_erp > 8000:
-            print(f"   ✅ HIGH VALUE - Professional recycling highly recommended")
-            print(f"   Priority: URGENT - Contains significant precious metals")
-        elif total_erp > 5500:
-            print(f"   ⚡ MEDIUM VALUE - Standard recycling process")
-            print(f"   Priority: MEDIUM - Good recovery potential")
-        else:
-            print(f"   ⚠️  LOWER VALUE - Consider parts harvesting or donation")
-            print(f"   Priority: LOW - Basic material recovery")
-        
-        print(f"\n2. COMPONENT-SPECIFIC RECOMMENDATIONS:")
-        
-        for comp_name, comp_erp in components.items():
-            if comp_erp < 0.01:
-                continue  # Skip negligible components
-                
-            print(f"\n   🔧 {comp_name} (₹{comp_erp:.2f}):")
-            
-            if comp_name == 'Processor':
-                print(f"      Method: Hydrometallurgy (chemical leaching)")
-                print(f"      Recoverable: Gold, Silver, Copper, Palladium")
-                print(f"      Priority: HIGHEST - 82.5% of total ERP")
-                print(f"      Note: Contains most valuable materials")
-            elif comp_name == 'RAM':
-                print(f"      Method: Pyrometallurgy (high-temp smelting)")
-                print(f"      Recoverable: Gold traces, Copper, Silver")
-                print(f"      Priority: HIGH - 14.4% of total ERP")
-                print(f"      Note: Gold content in circuit traces")
-            elif comp_name == 'Storage':
-                if laptop['storage_type'] == 'SSD':
-                    print(f"      Method: Pyrometallurgy (for chips)")
-                    print(f"      Recoverable: Gold, Copper, Silver")
-                else:
-                    print(f"      Method: Mechanical Separation")
-                    print(f"      Recoverable: Aluminum platters, Copper")
-                print(f"      Priority: MEDIUM - 1.7% of total ERP")
-            elif comp_name == 'Display':
-                print(f"      Method: Mechanical Separation")
-                print(f"      Recoverable: Aluminum frame, Indium (ITO coating)")
-                print(f"      Priority: MEDIUM - 1.4% of total ERP")
-            elif comp_name == 'Battery':
-                print(f"      Method: Hydrometallurgy")
-                print(f"      Recoverable: Lithium, Cobalt, Nickel")
-                print(f"      Safety: ⚠️  HANDLE WITH CARE - Fire hazard!")
-                print(f"      Priority: MEDIUM - Environmental concern")
-            else:  # Casing
-                print(f"      Method: Mechanical Separation")
-                print(f"      Recoverable: Bulk metal (Aluminum/Plastic)")
-                print(f"      Priority: LOW - Minimal value")
-        
-        print(f"\n3. ENVIRONMENTAL IMPACT:")
-        # Based on training data: avg GHG = 2.62 kg CO2e
-        ghg = (total_erp / 5514) * 2.62
-        print(f"   Estimated recycling GHG emissions: {ghg:.2f} kg CO2e")
-        print(f"   Landfill alternative: ~{ghg * 3:.1f} kg CO2e")
-        print(f"   Net environmental benefit: {ghg * 2:.1f} kg CO2e saved")
-        
-        print(f"\n4. PROCESS RECOMMENDATIONS:")
-        print(f"   Step 1: Remove and isolate battery (safety)")
-        print(f"   Step 2: Backup and securely wipe all data")
-        print(f"   Step 3: Remove easily accessible components (RAM, Storage)")
-        print(f"   Step 4: Contact certified e-waste recycler")
-        print(f"   Step 5: Request recycling certificate for records")
-        
-        if laptop['Price'] > 50000:
-            print(f"\n5. ALTERNATIVE CONSIDERATION:")
-            print(f"   💡 TIP: This is a high-value laptop!")
-            print(f"   Consider refurbishment/resale instead of recycling")
-            print(f"   Estimated resale value: ₹{laptop['Price'] * 0.4:.0f} - ₹{laptop['Price'] * 0.6:.0f}")
-            print(f"   Resale likely exceeds recycling value significantly")
-        
-        print(f"\n6. CERTIFIED RECYCLER FINDER:")
-        print(f"   India: Search 'e-waste collection center' + your city")
-        print(f"   Verify: Recycler should have CPCB authorization")
-        print(f"   Request: Certificate of environmentally sound recycling")
-    
-    def run_interactive_session(self):
-        """Run complete interactive prediction session"""
-        print("\n" + "="*80)
-        print("🌟 E-WASTE PREDICTION SYSTEM - INTERACTIVE MODE")
-        print("="*80)
-        
+            print(f"  LIME error: {e}")
+
+    # ── Recommendations ───────────────────────────────────────────────────────
+    def _recommendations(self, laptop: dict, ml_pred: float, components: dict):
+        print("\n" + "=" * 70)
+        print("RECYCLING RECOMMENDATIONS")
+        print("=" * 70)
+
+        total       = ml_pred
+        stor_method = ('Pyrometallurgy'
+                       if 'SSD' in str(laptop.get('storage_type', 'SSD')).upper()
+                       else 'Mechanical Separation')
+
+        print(f"\n1. VALUATION")
+        print(f"   Predicted ERP        : Rs.{total:,.2f}")
+        print(f"   Est. recycler buyback: Rs.{total * 0.40:,.0f} – Rs.{total * 0.55:,.0f}")
+        tier = ("HIGH VALUE — hydrometallurgy recommended first" if total > 25000
+                else "MEDIUM VALUE — standard certified e-waste process" if total > 12000
+                else "LOWER VALUE — consider donation or buy-back schemes")
+        print(f"   Tier: {tier}")
+
+        print(f"\n2. COMPONENT PRIORITIES (highest first)")
+        print(f"   {'Component':12s} {'ERP (Rs.)':>12} {'%':>7}  "
+              f"Method  -> Key metals")
+        print("   " + "-" * 78)
+        sorted_c = sorted(components.items(), key=lambda x: x[1], reverse=True)
+        for comp, val in sorted_c:
+            if val == 0:
+                continue
+            pct    = val / total * 100 if total > 0 else 0
+            mth    = RECYCLING_METHODS.get(comp, stor_method)
+            metals = RECOVERABLE_METALS.get(comp, '—')
+            warn   = '  [FIRE RISK — handle first]' if comp == 'Battery' else ''
+            print(f"   {comp:12s} Rs.{val:>9,.2f}  {pct:>6.1f}%  "
+                  f"{mth} -> {metals}{warn}")
+
+        print(f"\n3. STEP-BY-STEP PROCESS")
+        print(f"   1. Remove & isolate battery (fire/explosion risk)")
+        print(f"   2. Wipe all storage (data security — use DBAN)")
+        print(f"   3. Remove RAM and SSD/HDD modules")
+        print(f"   4. Send to CPCB-authorised e-waste facility")
+        print(f"   5. Request recycling certificate")
+        print(f"   Find a facility: https://cpcb.nic.in/e-waste-management/")
+
+        if laptop.get('Price', 0) > 50000:
+            age_factor = compute_component_erp(laptop)['_age_factor']
+            resale     = laptop['Price'] * 0.40 * age_factor
+            print(f"\n4. REFURBISHMENT ALTERNATIVE")
+            print(f"   Est. resale: Rs.{resale:,.0f} "
+                  f"(40% of price × age factor {age_factor:.2f})")
+            if resale > ml_pred:
+                print(f"   Recommendation: Resale > ERP — consider refurbishment first")
+            else:
+                print(f"   Recommendation: ERP > Resale — recycling gives better return")
+
+    # ── Run ───────────────────────────────────────────────────────────────────
+    def run(self):
+        print("\n" + "=" * 70)
+        print("INTERACTIVE MODE")
+        print("=" * 70)
         while True:
             try:
-                laptop = self.get_user_input()
-                total_erp, input_df = self.predict_erp(laptop)
-                components = self.estimate_component_breakdown(laptop, total_erp)
-                
-                print("\n" + "="*80)
-                print("🤖 EXPLAINABLE AI - Understanding the Prediction")
-                print("="*80)
-                
-                self.explain_with_shap(input_df)
-                self.explain_with_lime(input_df)
-                self.provide_recommendations(laptop, total_erp, components)
-                
-                print("\n" + "="*80)
-                another = input("\n🔄 Predict another laptop? (yes/no): ").strip().lower()
-                if another not in ['yes', 'y']:
+                laptop = self._get_input()
+                print("\n" + "=" * 70)
+                print("PREDICTING...")
+                print("=" * 70)
+                ml_pred, inp_df = self._predict(laptop)
+                print(f"\n  ML Model Prediction: Rs.{ml_pred:,.2f}")
+
+                components = self._show_breakdown(laptop, ml_pred)
+                self._explain_shap(inp_df)
+                self._explain_lime(inp_df)
+                self._recommendations(laptop, ml_pred, components)
+
+                again = input("\nPredict another laptop? (yes/no): ").strip().lower()
+                if again not in ('yes', 'y'):
                     break
-                    
             except KeyboardInterrupt:
-                print("\n\n👋 Exiting...")
+                print("\n\nExiting.")
                 break
             except Exception as e:
-                print(f"\n❌ Error: {e}")
-                import traceback
-                traceback.print_exc()
-                retry = input("\nTry again? (yes/no): ").strip().lower()
-                if retry not in ['yes', 'y']:
+                print(f"\nError: {e}")
+                import traceback; traceback.print_exc()
+                if input("Try again? (yes/no): ").strip().lower() not in ('yes', 'y'):
                     break
-        
-        print("\n" + "="*80)
-        print("✅ SESSION COMPLETE - Thank you for using E-Waste Predictor!")
-        print("="*80)
+        print("\nSession complete.")
+
 
 def main():
-    """Main execution"""
     try:
-        predictor = EWastePredictor()
-        predictor.run_interactive_session()
-        
+        EWastePredictor().run()
     except Exception as e:
-        print(f"\n❌ Fatal Error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Fatal: {e}")
+        import traceback; traceback.print_exc()
         sys.exit(1)
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     main()

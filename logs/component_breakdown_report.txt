@@ -2,18 +2,18 @@
 COMPONENT BREAKDOWN AND RECYCLING RECOMMENDATIONS REPORT
 ================================================================================
 
-Generated: 2025-11-10 19:21:48
+Generated: 2026-05-21 11:07:24
 
 AVERAGE COMPONENT CONTRIBUTIONS
 --------------------------------------------------------------------------------
-Battery        : $13749.37 (59.08%)
-Processor      : $5090.21 (21.87%)
-Casing         : $2137.99 ( 9.19%)
-Display        : $1123.86 ( 4.83%)
-Ram            : $ 983.23 ( 4.22%)
-Storage        : $ 189.11 ( 0.81%)
+Battery        : $13261.12 (57.46%)
+Processor      : $5431.40 (23.53%)
+Casing         : $2108.62 ( 9.14%)
+Display        : $1111.41 ( 4.82%)
+Ram            : $ 997.35 ( 4.32%)
+Storage        : $ 169.87 ( 0.74%)
 
-Total Average ERP: $23273.76
+Total Average ERP: $23079.76
 
 ================================================================================
 RECYCLING METHOD DISTRIBUTION
@@ -44,151 +44,31 @@ SAMPLE LAPTOP RECOMMENDATIONS
 ================================================================================
 
 Laptop ID: 408
-Total ERP: $29682.49
-Total GHG: 3.62 kg CO2e
+Total ERP: $39593.76
+Total GHG: 0.00 kg CO2e
 
 Components:
-  Ram:
-    ERP: $2821.73
-    Method: Pyrometallurgy
-    GHG: 1.09 kg CO2e
-  Processor:
-    ERP: $5857.06
-    Method: Hydrometallurgy
-    GHG: 0.15 kg CO2e
-  Battery:
-    ERP: $16846.34
-    Method: Hydrometallurgy
-    GHG: 1.51 kg CO2e
-  Display:
-    ERP: $1163.46
-    Method: Mechanical_Separation
-    GHG: 0.32 kg CO2e
-  Storage:
-    ERP: $146.50
-    Method: Pyrometallurgy
-    GHG: 0.09 kg CO2e
-  Casing:
-    ERP: $2142.58
-    Method: Mechanical_Separation
-    GHG: 0.47 kg CO2e
 
 Laptop ID: 1424
-Total ERP: $24878.79
-Total GHG: 2.32 kg CO2e
+Total ERP: $23259.02
+Total GHG: 0.00 kg CO2e
 
 Components:
-  Ram:
-    ERP: $705.43
-    Method: Pyrometallurgy
-    GHG: 0.27 kg CO2e
-  Processor:
-    ERP: $5020.34
-    Method: Hydrometallurgy
-    GHG: 0.13 kg CO2e
-  Battery:
-    ERP: $16846.34
-    Method: Hydrometallurgy
-    GHG: 1.51 kg CO2e
-  Display:
-    ERP: $894.97
-    Method: Mechanical_Separation
-    GHG: 0.25 kg CO2e
-  Storage:
-    ERP: $146.50
-    Method: Pyrometallurgy
-    GHG: 0.09 kg CO2e
-  Casing:
-    ERP: $559.42
-    Method: Mechanical_Separation
-    GHG: 0.08 kg CO2e
 
 Laptop ID: 682
-Total ERP: $19287.54
-Total GHG: 2.22 kg CO2e
+Total ERP: $24434.34
+Total GHG: 0.00 kg CO2e
 
 Components:
-  Ram:
-    ERP: $705.43
-    Method: Pyrometallurgy
-    GHG: 0.27 kg CO2e
-  Processor:
-    ERP: $4183.62
-    Method: Hydrometallurgy
-    GHG: 0.10 kg CO2e
-  Battery:
-    ERP: $13477.08
-    Method: Hydrometallurgy
-    GHG: 1.21 kg CO2e
-  Display:
-    ERP: $1163.46
-    Method: Mechanical_Separation
-    GHG: 0.32 kg CO2e
-  Storage:
-    ERP: $146.50
-    Method: Pyrometallurgy
-    GHG: 0.09 kg CO2e
-  Casing:
-    ERP: $0.00
-    Method: Refurbishment
-    GHG: 0.23 kg CO2e
 
 Laptop ID: 3155
-Total ERP: $19731.96
-Total GHG: 2.11 kg CO2e
+Total ERP: $19795.02
+Total GHG: 0.00 kg CO2e
 
 Components:
-  Ram:
-    ERP: $705.43
-    Method: Pyrometallurgy
-    GHG: 0.27 kg CO2e
-  Processor:
-    ERP: $4183.62
-    Method: Hydrometallurgy
-    GHG: 0.10 kg CO2e
-  Battery:
-    ERP: $13477.08
-    Method: Hydrometallurgy
-    GHG: 1.21 kg CO2e
-  Display:
-    ERP: $1044.13
-    Method: Mechanical_Separation
-    GHG: 0.29 kg CO2e
-  Storage:
-    ERP: $146.50
-    Method: Pyrometallurgy
-    GHG: 0.09 kg CO2e
-  Casing:
-    ERP: $0.00
-    Method: Refurbishment
-    GHG: 0.14 kg CO2e
 
 Laptop ID: 2354
-Total ERP: $29111.12
-Total GHG: 3.27 kg CO2e
+Total ERP: $28706.14
+Total GHG: 0.00 kg CO2e
 
 Components:
-  Ram:
-    ERP: $1410.87
-    Method: Pyrometallurgy
-    GHG: 0.54 kg CO2e
-  Processor:
-    ERP: $5857.06
-    Method: Hydrometallurgy
-    GHG: 0.15 kg CO2e
-  Battery:
-    ERP: $13477.08
-    Method: Hydrometallurgy
-    GHG: 1.21 kg CO2e
-  Display:
-    ERP: $1193.29
-    Method: Mechanical_Separation
-    GHG: 0.33 kg CO2e
-  Storage:
-    ERP: $146.50
-    Method: Pyrometallurgy
-    GHG: 0.09 kg CO2e
-  Casing:
-    ERP: $6640.32
-    Method: Mechanical_Separation
-    GHG: 0.95 kg CO2e

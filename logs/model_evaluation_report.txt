@@ -2,16 +2,16 @@
 MODEL EVALUATION REPORT
 ================================================================================
 
-Generated: 2025-11-10 19:15:08
+Generated: 2026-05-21 11:02:27
 
 DETAILED METRICS COMPARISON
 --------------------------------------------------------------------------------
-                    Model       R²         MAE        RMSE     MAPE  Median_AE   Max_Error
-        Linear Regression 0.954977  715.542787  918.103213 3.135105 598.887006 2921.148733
-            Random Forest 0.985200  415.413237  526.392958 1.783651 350.676607 2163.375838
-                  XGBoost 0.986862  393.277084  495.958343 1.690823 342.561227 2953.677953
-Support Vector Regression 0.840609 1077.685796 1727.461655 4.721025 635.083354 9362.612007
-        Gradient Boosting 0.988767  371.956484  458.586102 1.598722 343.026011 1684.519048
+                    Model       R²         MAE        RMSE      MAPE   Median_AE    Max_Error
+        Linear Regression 0.823445 2357.053272 3075.170459  9.506322 1894.728445 12819.645721
+            Random Forest 0.935465 1388.417424 1859.206102  5.680975 1137.082716 10652.515036
+                  XGBoost 0.953364 1201.236968 1580.489795  4.880231  990.601012 10132.979923
+Support Vector Regression 0.319620 4189.963538 6036.776084 18.400686 2599.953482 32706.220051
+        Gradient Boosting 0.956417 1155.741747 1527.868320  4.696295  961.522514  9104.437297
 
 ================================================================================
 BEST MODEL SELECTION
@@ -19,18 +19,18 @@ BEST MODEL SELECTION
 Selected Model: Gradient Boosting
 
 Performance Metrics:
-  R²: 0.9888
-  MAE: $371.96
-  RMSE: $458.59
-  MAPE: 1.60%
-  Median_AE: $343.03
-  Max_Error: $1684.52
+  R²: 0.9564
+  MAE: $1155.74
+  RMSE: $1527.87
+  MAPE: 4.70%
+  Median_AE: $961.52
+  Max_Error: $9104.44
 
 ================================================================================
 MODEL RANKING (by R²)
 ================================================================================
-5. Gradient Boosting              R² = 0.9888
-3. XGBoost                        R² = 0.9869
-2. Random Forest                  R² = 0.9852
-1. Linear Regression              R² = 0.9550
-4. Support Vector Regression      R² = 0.8406
+5. Gradient Boosting              R² = 0.9564
+3. XGBoost                        R² = 0.9534
+2. Random Forest                  R² = 0.9355
+1. Linear Regression              R² = 0.8234
+4. Support Vector Regression      R² = 0.3196

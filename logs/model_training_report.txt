@@ -1,27 +1,22 @@
 ================================================================================
-MODEL TRAINING REPORT - VERIFIED PROPER TRAINING
+MODEL TRAINING REPORT  (FIXED v3.0)
+Generated : 2026-06-11 11:09:27
 ================================================================================
 
-Generated: 2025-11-10 19:13:34
+Dataset   : 3,976 samples
+Train set : 3,180 samples (80%)
+Test set  : 796 samples (20%)
+Features  : 23
+ERP range : ₹7441 – ₹57388
 
-DATASET CONFIGURATION
+Model                         Train R²   Test R²      CV R²    MAE (₹)   MAPE%    Time
 --------------------------------------------------------------------------------
-Training samples: 3,180
-Test samples: 796
-Features: 23
-Target range: $13867.45 - $43978.33
+Linear Regression               0.8859    0.8703     0.8830    1685.88    8.07   0.24s
+Random Forest                   0.9855    0.9381     0.9382    1150.89    5.57   1.80s
+XGBoost                         0.9932    0.9547     0.9521    1004.54    4.83   0.79s
+Support Vector Regression       0.6895    0.6845     0.6530    2178.93   10.21   0.89s
+Gradient Boosting               0.9819    0.9588     0.9595     953.00    4.60   3.67s
 
-MODEL PERFORMANCE
---------------------------------------------------------------------------------
-Model                       Train R²    Test R²        MAE       RMSE     Time
---------------------------------------------------------------------------------
-Linear Regression             0.9637     0.9550 $   715.54 $   918.10    0.16s
-Random Forest                 0.9966     0.9852 $   415.41 $   526.39    1.76s
-XGBoost                       0.9978     0.9869 $   393.28 $   495.96    0.59s
-Support Vector Regression     0.8268     0.8406 $  1077.69 $  1727.46    0.87s
-Gradient Boosting             0.9951     0.9888 $   371.96 $   458.59    1.41s
-
-================================================================================
-BEST MODEL: Gradient Boosting
-Test R²: 0.9888
-Test MAE: $371.96
+BEST MODEL : Gradient Boosting
+Test R²    : 0.9588
+MAE        : ₹953.00
